@@ -2,7 +2,7 @@ const client = require('./client')
 
 const { ASANA_PROJECT = '1152701043959235' } = process.env
 
-const pastFilter = task => new Date(`${task.due_at ? task.due_at : `${task.due_on}T23:59:59}`}`) < new Date()
+const pastFilter = task => new Date(`${task.due_at ? task.due_at : `${task.due_on}T23:59:59.999Z`}`) < new Date()
 
 const markPastDue = (project_id = ASANA_PROJECT) => client.projects.tasks(project_id, {
   completed_since: 'now',
@@ -15,7 +15,7 @@ const markPastDue = (project_id = ASANA_PROJECT) => client.projects.tasks(projec
 if (typeof require !== 'undefined' && require.main === module) {
   markPastDue().then((res) => {
     console.log(res)
-    console.log('Daily sweeping done!')
+    console.log(`Daily sweeping done! ${res.length} past time slots marked as complete!`)
     process.exit(0)
   }).catch((err) => {
     console.error(err)
