@@ -29,6 +29,7 @@ jobs:
             ${{ runner.OS }}-build-
             ${{ runner.OS }}-
       - run: yarn install
-      - run: yarn routine
+      - run: yarn routine 1152701043959235
+      - run: yarn routine 1153484903445659
         env:
           ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
