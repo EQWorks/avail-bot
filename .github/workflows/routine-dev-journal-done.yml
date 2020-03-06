@@ -2,7 +2,7 @@ name: Routine
 
 on:
   schedule:
-    - cron: '0 10 * * * '
+    - cron: '5 10 * * * '
 
 jobs:
   routine:
@@ -33,6 +33,4 @@ jobs:
       - name: Mark them as done
         env:
           ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
-        run: |
-          yarn routine 1152701043959235
-          yarn routine 1153484903445659
+        run: yarn routine 1153484903445659
