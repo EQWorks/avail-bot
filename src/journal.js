@@ -16,26 +16,30 @@ const getTaskById = (id) => client.tasks.findById(id).then((res) => res)
 const getSubTaskById = (id) => client.tasks.subtasks(id).then((res) => res.data)
 
 // get everybody's journals
-const getJournals = (params, completed) => {
-  return client.tasks.findAll(params).then(({ data }) => {
-    const prevDayTasks = data.filter((task) => task.due_on && new Date(`${task.due_on}T23:59:59.999Z`) < new Date())
-    const taskArr = prevDayTasks.map(async (t) => {
-      const incompTaskParams = await getSubTasks(t, completed)
-      const prevTask = await getTaskById(t.gid)
-      return {
-        gid: prevTask.gid,
-        name: prevTask.name,
-        assignee: prevTask.assignee,
-        projects: prevTask.projects[0].gid,
-        workspace: prevTask.workspace.gid,
-        subTasks: incompTaskParams,
-      }
-    })
-    return Promise.all(taskArr).then((res) => res)
+const getJournals = async (params) => {
+  const { data } = await client.tasks.findAll(params)
+  const customFieldGid = data.map(t => t.custom_fields)
+  const prevDayTasks = data.filter((task) => task.due_on && new Date(`${task.due_on}T23:59:59.999Z`) < new Date())
+  const taskArr = prevDayTasks.map(async (t) => {
+    const compTaskParams = await getSubTasks(t, true)
+    const incompTaskParams = await getSubTasks(t, false)
+    const prevTask = await getTaskById(t.gid)
+    return {
+      gid: prevTask.gid,
+      name: prevTask.name,
+      assignee: prevTask.assignee,
+      projects: prevTask.projects[0].gid,
+      workspace: prevTask.workspace.gid,
+      incompleteSubTasks: incompTaskParams,
+      completedSubTasks: compTaskParams,
+      customField: customFieldGid[0][0].gid,
+    }
   })
+  const res = await Promise.all(taskArr)
+  return res
 }
 
-// get incomplete subtasks for each task
+// filter for completed/incomplete subtasks for each task
 const getFilteredTasks = async (task, completed) => {
   const subTasks = await getSubTaskById(task.gid)
   const tasks = subTasks.map(async (t) => {
@@ -59,7 +63,7 @@ const getSubTasks = async (task, completed) => {
         const subChildParams = subChildTasks.map(async (child) => {
           return {
             name: child.name,
-            subTasks: await getSubTasks(child),
+            subTasks: await getSubTasks(child, completed),
           }
         })
         const childTasks = await Promise.all(subChildParams).then((r) => r)
@@ -76,20 +80,41 @@ const getSubTasks = async (task, completed) => {
 // create new journal
 const createJournal = (param) => client.tasks.create(param).then((res) => res)
 
-// complete/incomplete sub tasks and task id
+// create sub tasks for each parent task
 const createSubTasks = (taskId, subTasks) => {
-  subTasks.forEach(async (task) => {
-    // task: { name: '', subTask: [] }
-    const subTaskParam = { name: task.name }
-    if (task.subTasks.length > 0) {
-      client.tasks.addSubtask(taskId, subTaskParam).then((r) => {
-        createSubTasks(r.gid, task.subTasks)
-      })
-    } else {
-      client.tasks.addSubtask(taskId, subTaskParam)
-    }
-  })
-}                                 
+  if (subTasks.length > 0) {
+    subTasks.forEach(async (task) => {
+      // task: { name: '', subTask: [] }
+      const subTaskParam = { name: task.name }
+      if (task.subTasks.length > 0) {
+        client.tasks.addSubtask(taskId, subTaskParam).then((r) => {
+          createSubTasks(r.gid, task.subTasks)
+        })
+      } else {
+        client.tasks.addSubtask(taskId, subTaskParam)
+      }
+    })
+  }
+}
+
+// format completed tasks & subtasks into single string
+const getLastJournalNotes = async (journal) => {
+  let taskArr = journal.completedSubTasks || journal
+  if (taskArr.length > 0) {
+    let notes = taskArr.map(async (j) => {
+      if (j.subTasks.length > 0) {
+        let subNotesString = await getLastJournalNotes(j.subTasks)
+        let subNotes = subNotesString.split('\n')
+        return `${j.name}
+        * ${subNotes.join('\n        * ')}`
+      }
+      return `${j.name}`
+    })
+    let noteString = await Promise.all(notes).then((r) => r)
+    return `- ${noteString.join('\n- ')}`
+  }
+  return ""
+}
 
 const createNewJournals = async () => {
   try {
@@ -98,12 +123,14 @@ const createNewJournals = async () => {
       completed_since: 'now',
       opt_fields: 'completed,projects.name,due_on,name,notes,subtasks,assignee.name,custom_fields',
     }
-    const completed = false
 
-    const journals = await getJournals(params, completed)
+    const journals = await getJournals(params)
 
     journals.map(async (journal) => {
-      if (journal.subTasks.length > 0) {
+      if (journal.incompleteSubTasks.length > 0 || journal.completedSubTasks.length > 0) {
+        const lastJournalNotes = await getLastJournalNotes(journal)
+        console.log(lastJournalNotes)
+
         // const createJournalParams = {
         //   name: `TEST-${journal.name}`,
         //   assignee: journal.assignee.gid,
@@ -111,21 +138,27 @@ const createNewJournals = async () => {
         //   due_on: `${new Date().getFullYear()}-0${new Date().getMonth() + 1}-${new Date().getDate()}`,
         //   projects: [journal.projects],
         //   workspace: journal.workspace,
+        //   custom_fields: {
+        //     [journal.customField]: lastJournalNotes,
+        //   },
         // }
+    
         const createJournalParams = {
           name: `TEST-${journal.name}`,
           completed: false,
-          due_on: `${new Date().getFullYear()}-0${new Date().getMonth() + 1}-${new Date().getDate() + 1}`,
+          due_on: `${new Date().getFullYear()}-0${new Date().getMonth() + 1}-${new Date().getDate()}`,
           projects: [journal.projects],
           workspace: journal.workspace,
+          custom_fields: {
+            [journal.customField]: lastJournalNotes,
+          },
         }
         const newJournal = await createJournal(createJournalParams)
-        createSubTasks(newJournal.gid, journal.subTasks)
+        createSubTasks(newJournal.gid, journal.incompleteSubTasks)
       }
     })
   } catch (e) {
     console.error(e)
-    return false
   }
 }
 
