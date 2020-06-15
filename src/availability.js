@@ -75,17 +75,41 @@ const getTasksForProject = async ({
   projectName = 'Dev Avail',
   sectionName = false,
   userName = false,
+  customFieldSearches = [], // [{ name, search }]
   rawParams = { completed_since: 'now' },
-  now = true,
+  now,
 }) => {
   try {
     const workspace = await getWorkspaceId(wsName)
     const team = await getTeamId(workspace, teamName)
     const project = await getProjectId(projectName, { team })
+    let customFieldParams = {}
+    if (customFieldSearches.length) {
+      const customFields = await getCustomFieldsByWorkspace(workspace)
+      customFieldParams = customFieldSearches.reduce((agg, { name, search }) => {
+        const cf = customFields.find((o) => name === o.name)
+        if (cf) {
+          /*
+            custom_fields.{gid}.is_set  All  Boolean
+            custom_fields.{gid}.value  Text  String
+            custom_fields.{gid}.value  Number  Number
+            custom_fields.{gid}.value  Enum  Enum option ID
+            custom_fields.{gid}.starts_with  Text only  String
+            custom_fields.{gid}.ends_with  Text only  String
+            custom_fields.{gid}.contains  Text only  String
+            custom_fields.{gid}.less_than  Number only  Number
+            custom_fields.{gid}.greater_than  Number only  Number
+          */
+          agg[`custom_fields.${cf.gid}.${search.type}`] = search.value
+        }
+        return agg
+      }, {})
+    }
     const params = {
-      opt_fields: `workspace.name,projects.name,tags.name,memberships.section,
+      opt_fields: `workspace.name,projects.name,tags.name, tags.status, memberships.section,
         due_on,due_at,name,notes,completed,resource_subtype,assignee.name,custom_fields`,
       ...rawParams,
+      ...customFieldParams,
     }
     let sectionId
     if (sectionName) {
@@ -101,7 +125,8 @@ const getTasksForProject = async ({
     //  params.assignee = userId
     //  params.workspace = workspace
     // }
-    const tasks = await getTasks(params)
+    // NOTE: changed to workspace search to support custom fields
+    const tasks = await getTasksForWorkspace(workspace, params)
     return tasks
       .filter(({
         due_at,
