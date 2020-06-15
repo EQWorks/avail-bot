@@ -22,10 +22,35 @@ const getSectionId = (project, sectionName) => client.sections.findByProject(pro
     return section ? section.gid : false
   })
 
+// https://developers.asana.com/docs/#tocS_CustomField
+// https://developers.asana.com/docs/#search-tasks-in-a-workspace
+/*
+  custom_fields:
+   [
+      {
+        gid: '1159688855981996',
+        enabled: true,
+        enum_options: [Array],
+        enum_value: [Object],
+        name: 'Status',
+        resource_subtype: 'enum',
+        resource_type: 'custom_field',
+        type: 'enum',
+      },
+    ],
+*/
+// this requires project-wide custom field (manual in Asana)
+// TODO: search using project or something else
+const getCustomFieldsByWorkspace = (wsId) => client.customFields
+  .findByWorkspace(wsId).then((res) => res.data)
+
 // params.section
 // params.workspace
 // params.project
 const getTasks = (params) => client.tasks.findAll(params).then((res) => res.data)
+const getTasksForWorkspace = (workspace, params) => client.tasks.searchInWorkspace(workspace, params)
+  .then((res) => res.data)
+const updateTask = (taskId, params) => client.tasks.update(taskId, params).then((res) => res)
 
 /* example utils
 
