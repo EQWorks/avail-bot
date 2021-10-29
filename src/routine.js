@@ -1,7 +1,11 @@
-const client = require('./client')
+const asana = require('asana')
 
 
-const { ASANA_PROJECT = '1152701043959235', BACKOFF = 30 } = process.env
+const { ASANA_TOKEN, ASANA_PROJECT = '1152701043959235', BACKOFF = 30 } = process.env
+
+const client = asana.Client
+  .create({ defaultHeaders: { 'asana-enable': 'string_ids,new_sections' } })
+  .useAccessToken(ASANA_TOKEN)
 
 const timeout = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
