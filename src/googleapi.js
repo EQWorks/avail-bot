@@ -26,7 +26,19 @@ const _getDayOfWeek = (day) => (date) => {
 const getMonday = _getDayOfWeek(1)
 const getFriday = _getDayOfWeek(5)
 
-const AVAILS = ['vacation', 'appointment', 'not avail']
+const AVAILS = ['vacation', 'appointment', 'not avail', 'ooo']
+
+const getWeeklyAvails = () => calendar.events
+  .list({
+    calendarId: AVAIL_CALENDAR,
+    timeMin: getMonday(today),
+    timeMax: getFriday(today),
+    singleEvents: true,
+  }).then(({ data: { items } }) => {
+    if (items.length) return groupByName(items)
+    return {}
+  })
+  .catch((e) => console.error('Failed to fetch weekly events: ', e))
 
 const formatAvailDates = (availDate, avail) => {
   const dateTime = new Date(availDate)
@@ -59,33 +71,30 @@ const groupByName = (avails) => avails
     return acc
   }, {})
 
-const getWeeklyAvails = () => calendar.events
-  .list({
-    calendarId: AVAIL_CALENDAR,
-    timeMin: getMonday(today),
-    timeMax: getFriday(today),
-    singleEvents: true,
-  }).then(({ data: { items } }) => {
-    if (items.length) return groupByName(items)
-    return {}
-  })
-  .catch((e) => console.error('Failed to fetch weekly events: ', e))
+const formatDateTime = (av, { start, end, sequence }) => {
+  if (av === 'vacation') {
+    return sequence ? `${start} to ${end}` : end
+  }
 
-const formatAppointment = ({ start, end }) => {
   const [startDate, startTime] = start.split(', ')
   const [endDate, endTime] = end.split(', ')
-  if (startDate === endDate) {
-    return `${endDate}, ${startTime} - ${endTime}`
-  }
+
+  if (startDate === endDate) return `${endDate}, ${startTime} - ${endTime}`
   return `${start} - ${end}`
 }
 
 const formatWeeklyAvails = async () => {
   const avails = await getWeeklyAvails()
   return Object.entries(avails)
-    .reduce((acc, [name, { appointment, vacation }]) => {
-      acc.appointment = [...(acc.appointment || []), { [name]: appointment.map((apt) => formatAppointment(apt)) }]
-      acc.vacation = [...(acc.vacation || []), { [name]: vacation.map((v) => v.sequence ? `${v.start} to ${v.end}` : v.end) }]
+    .reduce((acc, [name, av]) => {
+      AVAILS.forEach((availType) => {
+        if (av[availType]) {
+          acc[availType] = [
+            ...(acc[availType] || []),
+            { [name]: av[availType].map((apt) => formatDateTime(availType, apt)) },
+          ]
+        }
+      })
       return acc
     }, {})
 }
