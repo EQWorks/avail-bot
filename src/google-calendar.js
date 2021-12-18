@@ -8,14 +8,15 @@ const { google } = require('googleapis')
 // ]
 
 const {
-  AVAIL_CALENDAR,
-  CLIENT_ID,
-  CLIENT_SECRET,
-  REFRESH_TOKEN,
+  GOOGLE_AVAIL_CALENDAR,
+  GAC_CLIENT_ID,
+  GAC_CLIENT_SECRET,
+  GAC_REFRESH_TOKEN,
+  AVAILS = ['vacation', 'appointment', 'not avail', 'ooo'],
 } = process.env
 
-const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET)
-oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN })
+const oAuth2Client = new google.auth.OAuth2(GAC_CLIENT_ID, GAC_CLIENT_SECRET)
+oAuth2Client.setCredentials({ refresh_token: GAC_REFRESH_TOKEN })
 const calendar = google.calendar({ version: 'v3', auth: oAuth2Client })
 
 const today = new Date()
@@ -26,19 +27,16 @@ const _getDayOfWeek = (day) => (date) => {
 const getMonday = _getDayOfWeek(1)
 const getFriday = _getDayOfWeek(5)
 
-const AVAILS = ['vacation', 'appointment', 'not avail', 'ooo']
-
 const getWeeklyAvails = () => calendar.events
   .list({
-    calendarId: AVAIL_CALENDAR,
+    calendarId: GOOGLE_AVAIL_CALENDAR,
     timeMin: getMonday(today),
     timeMax: getFriday(today),
     singleEvents: true,
   }).then(({ data: { items } }) => {
     if (items.length) return groupByName(items)
     return {}
-  })
-  .catch((e) => console.error('Failed to fetch weekly events: ', e))
+  }).catch((e) => console.error('Failed to fetch weekly events: ', e))
 
 const formatAvailDates = (availDate, avail) => {
   const dateTime = new Date(availDate)
