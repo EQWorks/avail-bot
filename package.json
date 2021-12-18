@@ -8,7 +8,8 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "asana": "^0.18.5"
+    "asana": "^0.18.5",
+    "googleapis": "^92.0.0"
   },
   "devDependencies": {
     "eslint": "^8.0.1"
